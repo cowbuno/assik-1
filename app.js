@@ -8,7 +8,12 @@ function askQuestion(query) {
       readline.question(query, resolve);
     });
   }
-  
+
+  const { encrypt,decrypt } = require('./encryption');  
+  const { generateKeys, signData, verifySignature } = require('./digitalSignature');
+  // Generate a new public/private key pair (This should be done securely and stored for a real app)
+const { publicKey, privateKey } = generateKeys();
+
 
 const crypto = require('crypto');
 
@@ -29,6 +34,13 @@ class Block {
       // Hashing functionality here
       return calculateHash(this.index + this.prevHash + this.timestamp + JSON.stringify(this.data)).toString();
     }
+
+    getDecryptedData() {
+        if (this.data) {
+          return decrypt(this.data);
+        }
+        return null;
+      }
   }
   
 class Blockchain {
@@ -61,17 +73,38 @@ async function main() {
     while (true) {
       console.log("\n1. Add a new block");
       console.log("2. Print the blockchain");
-      console.log("3. Exit");
+      console.log("3. Decrypt and print the latest block");
+      console.log("4. Exit");
   
-      const action = await askQuestion("Choose an action (1-3): ");
+      const action = await askQuestion("Choose an action (1-4): ");
   
       if (action === '1') {
-        const data = await askQuestion("Enter block data: ");
-        myBlockchain.addBlock(new Block(myBlockchain.chain.length, data, myBlockchain.getLatestBlock().hash));
-        console.log("Block added!");
-      } else if (action === '2') {
+        let data = await askQuestion("Enter block data: ");
+        const encryptedData = encrypt(data);  // Encrypting the data
+        const dataToSign = JSON.stringify(encryptedData); // Converting encrypted data to a string to sign it
+        const signature = signData(dataToSign, privateKey); // Signing the encrypted data
+        const newBlock = new Block(myBlockchain.chain.length, encryptedData, myBlockchain.getLatestBlock().hash);
+        newBlock.signature = signature; // Storing the signature in the block
+        myBlockchain.addBlock(newBlock);
+        console.log("Block added with encrypted data and signature!");
+      } 
+         else if (action === '2') {
         console.log(JSON.stringify(myBlockchain, null, 2));
-      } else if (action === '3') {
+      } 
+      else if (action === '3') {
+        const latestBlock = myBlockchain.getLatestBlock();
+        if (latestBlock) {
+            const dataToVerify = JSON.stringify(latestBlock.data);
+            const isValid = verifySignature(dataToVerify, latestBlock.signature, publicKey);
+            console.log("Decrypted Data of the latest block:", decrypt(latestBlock.data));
+            console.log("Signature valid:", isValid);
+        } else {
+            console.log("No blocks to decrypt or verify.");
+        }
+    }
+    // sabakkka.
+     
+      else if (action === '4') {
         break;
       } else {
         console.log("Invalid option, please choose again.");
@@ -79,6 +112,7 @@ async function main() {
     }
   
     readline.close();
-  }
+}
+
   
   main();
